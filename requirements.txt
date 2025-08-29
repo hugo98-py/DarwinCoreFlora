@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+firebase-admin
+google-cloud-firestore
+google-api-core
+pandas
+numpy
+openpyxl
+lxml
+python-dateutil
