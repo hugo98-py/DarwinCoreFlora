@@ -317,7 +317,7 @@ def generar_excel_fauna_like(campana_id: str) -> Path:
         41: "Tipo de registro",
         42: "Código individuo",
         43: "Comentarios del registro biológico",
-        44: "Muestreado por",
+        43: "Muestreado por",
         45: "Identificado por",
         46: "Comentarios de la Identificación",
         47: "Observaciones adicionales",
@@ -407,3 +407,4 @@ def export_excel(request: Request, campana_id: str = Query(..., description="cam
 
     download_url = f"{str(request.base_url).rstrip('/')}/downloads/{out_path.name}"
     return JSONResponse({"download_url": download_url})
+
