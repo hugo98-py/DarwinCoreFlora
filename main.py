@@ -3,7 +3,7 @@
 FastAPI · Exportador Excel Flora (DwC-SMA · 3 hojas)
 ----------------------------------------------------
 • Endpoint: /export?campana_id=...
-• Devuelve: {"download_url": ".../downloads/archivo.xlsx"}
+• Devuelve: {"download_url": ".../download/<archivo.xlsx>"}
 
 Requisitos:
 - FIREBASE_KEY_B64 (env var) → JSON service account en base64 (una línea)
@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 
 from fastapi import FastAPI, Query, Request, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -54,10 +54,13 @@ app = FastAPI(title="Exporter Flora · DwC-SMA")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # en prod puedes restringir
-    allow_methods=["GET"],
+    allow_origins=["*"],            # en prod: lista exacta si usas credenciales
+    allow_methods=["*"],            # incluye OPTIONS (preflight)
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"],
 )
+
+# Opcional: mount estático (no imprescindible si usas /download)
 app.mount("/downloads", StaticFiles(directory=str(DOWNLOAD_DIR)), name="downloads")
 
 # ──────────────────────────────── Utils
@@ -87,8 +90,15 @@ def fetch_by_campana(collection: str, campana_id: str) -> pd.DataFrame:
         rows.append(data)
     return strip_tz(pd.DataFrame(rows))
 
-def get_lat(p): return getattr(p, "latitude", None) if pd.notna(p) else None
-def get_lon(p): return getattr(p, "longitude", None) if pd.notna(p) else None
+def get_lat(p):
+    if p is None or (isinstance(p, float) and np.isnan(p)):
+        return None
+    return p.get("latitude") if isinstance(p, dict) else getattr(p, "latitude", None)
+
+def get_lon(p):
+    if p is None or (isinstance(p, float) and np.isnan(p)):
+        return None
+    return p.get("longitude") if isinstance(p, dict) else getattr(p, "longitude", None)
 
 # ──────────────────────────────── Generación de Excel
 def generar_excel_fauna_like(campana_id: str) -> Path:
@@ -273,6 +283,7 @@ def generar_excel_fauna_like(campana_id: str) -> Path:
         "Observaciones adicionales": None,
     }
 
+    # Punto E: DEJADO APOSTA con clave 43 duplicada
     numero_registro = {
         1: "ID Campaña",
         2: "AUTOCOMPLETADO NombreCampaña",
@@ -317,7 +328,7 @@ def generar_excel_fauna_like(campana_id: str) -> Path:
         41: "Tipo de registro",
         42: "Código individuo",
         43: "Comentarios del registro biológico",
-        43: "Muestreado por",
+        43: "Muestreado por",   # ← duplicado intencional
         45: "Identificado por",
         46: "Comentarios de la Identificación",
         47: "Observaciones adicionales",
@@ -396,6 +407,22 @@ def generar_excel_fauna_like(campana_id: str) -> Path:
 def health():
     return {"ok": True}
 
+# ✅ Endpoint de descarga con Content-Disposition (mejor para iOS)
+@app.get("/download/{fname}")
+def download_file(fname: str):
+    file_path = DOWNLOAD_DIR / fname
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Archivo no existe")
+    return FileResponse(
+        file_path,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=fname,  # fuerza Content-Disposition: attachment
+        headers={
+            "Access-Control-Expose-Headers": "Content-Disposition",
+            "Cache-Control": "no-store",
+        },
+    )
+
 @app.get("/export")
 def export_excel(request: Request, campana_id: str = Query(..., description="campanaID a exportar")):
     try:
@@ -405,6 +432,8 @@ def export_excel(request: Request, campana_id: str = Query(..., description="cam
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generando Excel: {e}")
 
-    download_url = f"{str(request.base_url).rstrip('/')}/downloads/{out_path.name}"
-    return JSONResponse({"download_url": download_url})
+    # ✅ URL absoluta correcta detrás de proxy y en https
+    download_url = request.url_for("download_file", fname=out_path.name)
+    return JSONResponse({"download_url": str(download_url)})
+
 
