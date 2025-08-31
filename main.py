@@ -24,8 +24,15 @@ from fastapi import FastAPI, Query, Request, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.proxy_headers import ProxyHeadersMiddleware  # ← respeta x-forwarded-*
 
+# Import compatible con Starlette/Uvicorn
+try:
+    from starlette.middleware.proxy_headers import ProxyHeadersMiddleware  # algunas versiones
+except Exception:
+    try:
+        from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware  # fallback común
+    except Exception:
+        ProxyHeadersMiddleware = None
 from openpyxl import load_workbook
 
 import firebase_admin
@@ -54,7 +61,8 @@ db = firestore.client()
 app = FastAPI(title="Exporter Flora · DwC-SMA")
 
 # Respeta scheme/host detrás de proxy (Render/NGINX)
-app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
+if ProxyHeadersMiddleware is not None:
+    app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 app.add_middleware(
     CORSMiddleware,
@@ -448,3 +456,4 @@ def export_excel(request: Request, campana_id: str = Query(..., description="cam
     download_url = f"{proto}://{host}{rel}"
 
     return JSONResponse({"download_url": download_url, "filename": out_path.name})
+
