@@ -24,6 +24,7 @@ from fastapi import FastAPI, Query, Request, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.proxy_headers import ProxyHeadersMiddleware  # ← respeta x-forwarded-*
 
 from openpyxl import load_workbook
 
@@ -51,6 +52,9 @@ db = firestore.client()
 
 # ──────────────────────────────── FastAPI + CORS
 app = FastAPI(title="Exporter Flora · DwC-SMA")
+
+# Respeta scheme/host detrás de proxy (Render/NGINX)
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 app.add_middleware(
     CORSMiddleware,
@@ -283,7 +287,7 @@ def generar_excel_fauna_like(campana_id: str) -> Path:
         "Observaciones adicionales": None,
     }
 
-    # Punto E: DEJADO APOSTA con clave 43 duplicada
+    # Punto E: DEJADO APOSTA con clave 43 duplicada (se conserva tal cual)
     numero_registro = {
         1: "ID Campaña",
         2: "AUTOCOMPLETADO NombreCampaña",
@@ -407,16 +411,21 @@ def generar_excel_fauna_like(campana_id: str) -> Path:
 def health():
     return {"ok": True}
 
-# ✅ Endpoint de descarga con Content-Disposition (mejor para iOS)
+# ✅ Endpoint de descarga con Content-Disposition (forzar descarga en navegadores)
 @app.get("/download/{fname}")
 def download_file(fname: str):
-    file_path = DOWNLOAD_DIR / fname
+    # Sanitización básica del nombre (evita traversal)
+    if "/" in fname or "\\" in fname:
+        raise HTTPException(status_code=400, detail="Nombre de archivo inválido")
+    file_path = (DOWNLOAD_DIR / fname).resolve()
+    if not str(file_path).startswith(str(DOWNLOAD_DIR.resolve())):
+        raise HTTPException(status_code=400, detail="Ruta fuera de /downloads")
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Archivo no existe")
     return FileResponse(
         file_path,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        filename=fname,  # fuerza Content-Disposition: attachment
+        media_type="application/octet-stream",  # más compatible para forzar descarga
+        filename=fname,  # agrega Content-Disposition: attachment; filename=...
         headers={
             "Access-Control-Expose-Headers": "Content-Disposition",
             "Cache-Control": "no-store",
@@ -432,8 +441,10 @@ def export_excel(request: Request, campana_id: str = Query(..., description="cam
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generando Excel: {e}")
 
-    # ✅ URL absoluta correcta detrás de proxy y en https
-    download_url = request.url_for("download_file", fname=out_path.name)
-    return JSONResponse({"download_url": str(download_url)})
+    # ✅ URL absoluta detrás de proxy, forzando https si viene en headers
+    proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host  = request.headers.get("host", request.url.netloc)
+    rel   = request.url_for("download_file", fname=out_path.name).path  # solo el path
+    download_url = f"{proto}://{host}{rel}"
 
-
+    return JSONResponse({"download_url": download_url, "filename": out_path.name})
