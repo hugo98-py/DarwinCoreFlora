@@ -1,6 +1,7 @@
 fastapi
 uvicorn
 firebase-admin
+starlette
 google-cloud-firestore
 google-api-core
 pandas
@@ -8,3 +9,4 @@ numpy
 openpyxl
 lxml
 python-dateutil
+
