@@ -359,7 +359,7 @@ def generar_excel_fauna_like(campana_id: str) -> Path:
                 cellValue = get_lat(df_registro[col][i]) if (col in df_registro and pd.notna(df_registro[col][i])) else None
             elif col_name == "Longitud decimal registro":
                 cellValue = get_lon(df_registro[col][i]) if (col in df_registro and pd.notna(df_registro[col][i])) else None
-            elif col_name in {"Identificado por", "Comentarios de la Identificación"}:
+            elif col_name in {"Muestreado por" , "Identificado por"}:
                 cellValue = "AMS Consultores"
             elif col is None:
                 # campos sin fuente → dejar vacío (o " " si prefieres)
@@ -456,4 +456,5 @@ def export_excel(request: Request, campana_id: str = Query(..., description="cam
     download_url = f"{proto}://{host}{rel}"
 
     return JSONResponse({"download_url": download_url, "filename": out_path.name})
+
 
