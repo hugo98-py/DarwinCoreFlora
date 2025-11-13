@@ -402,7 +402,8 @@ def generar_excel_fauna_like(campana_id: str) -> Path:
     start_row = 3
     FORMULA_COLS = {
     "AUTOCOMPLETADO NombreCampaña",  # Columna B (n° 1 en tu mapeo)
-    "AUTOCOMPLETADO NombreEstacion-Número Replica-Tipo de monitoreo",  # Columna D (n° 3)}
+    "AUTOCOMPLETADO NombreEstacion-Número Replica-Tipo de monitoreo",  # Columna D (n° 3)
+    }
 
     for r in range(start_row, len(df_registro_plantilla) + start_row):
         for col_number in sorted(numero_registro.keys()):
@@ -468,6 +469,7 @@ def export_excel(request: Request, campana_id: str = Query(..., description="cam
     download_url = f"{proto}://{host}{rel}"
 
     return JSONResponse({"download_url": download_url, "filename": out_path.name})
+
 
 
 
