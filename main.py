@@ -19,7 +19,8 @@ from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
-
+import logging
+logger = logging.getLogger("uvicorn.error")
 from fastapi import FastAPI, Query, Request, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -434,21 +435,26 @@ def health():
 
 @app.get("/export")
 def export_excel(request: Request, campana_id: str = Query(..., description="campanaID a exportar")):
+    logger.info(f"Export llamado con campana_id={campana_id}")
     try:
         out_path = generar_excel_fauna_like(campana_id)
-    except HTTPException:
+        logger.info(f"Excel generado en: {out_path}")
+    except HTTPException as he:
+        logger.error(f"HTTPException en export: {he.detail}")
         raise
     except Exception as e:
+        logger.exception("Error no controlado generando Excel")
         raise HTTPException(status_code=500, detail=f"Error generando Excel: {e}")
 
-    # Como en el proyecto estable:
-    base = str(request.base_url).rstrip("/")
-    download_url = f"{base}/downloads/{out_path.name}"
+    proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host  = request.headers.get("host", request.url.netloc)
+    rel   = request.url_for("download_file", fname=out_path.name).path
+    download_url = f"{proto}://{host}{rel}"
 
-    return JSONResponse({
-        "download_url": download_url,
-        "filename": out_path.name,
-    })
+    logger.info(f"download_url generado: {download_url}")
+
+    return JSONResponse({"download_url": download_url, "filename": out_path.name})
+
 
 
 
