@@ -434,26 +434,36 @@ def health():
     return {"ok": True}
 
 @app.get("/export")
-def export_excel(request: Request, campana_id: str = Query(..., description="campanaID a exportar")):
-    logger.info(f"Export llamado con campana_id={campana_id}")
+def export_excel(
+    request: Request,
+    campana_id: str = Query(..., description="campanaID a exportar"),
+):
+    logger.info(f"[EXPORT] Llamado a /export con campana_id={campana_id!r}")
     try:
         out_path = generar_excel_fauna_like(campana_id)
-        logger.info(f"Excel generado en: {out_path}")
+        logger.info(f"[EXPORT] Excel generado en: {out_path}")
     except HTTPException as he:
-        logger.error(f"HTTPException en export: {he.detail}")
+        logger.error(f"[EXPORT] HTTPException: {he.detail}")
+        # re-lanzamos tal cual para que el cliente vea el status_code
         raise
     except Exception as e:
-        logger.exception("Error no controlado generando Excel")
-        raise HTTPException(status_code=500, detail=f"Error generando Excel: {e}")
+        logger.exception("[EXPORT] Error no controlado generando Excel")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error generando Excel: {e}",
+        )
 
     proto = request.headers.get("x-forwarded-proto", request.url.scheme)
     host  = request.headers.get("host", request.url.netloc)
     rel   = request.url_for("download_file", fname=out_path.name).path
     download_url = f"{proto}://{host}{rel}"
 
-    logger.info(f"download_url generado: {download_url}")
+    logger.info(f"[EXPORT] URL de descarga generada: {download_url}")
 
-    return JSONResponse({"download_url": download_url, "filename": out_path.name})
+    return JSONResponse(
+        {"download_url": download_url, "filename": out_path.name}
+    )
+
 
 
 
