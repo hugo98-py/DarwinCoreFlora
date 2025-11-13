@@ -399,14 +399,26 @@ def generar_excel_fauna_like(campana_id: str) -> Path:
             ws.cell(row=r, column=col_number, value=v)
 
     # Ocurrencia (borrar previas y desde fila 3)
-    if wo.max_row > 2:
-        wo.delete_rows(3, wo.max_row - 2)
     start_row = 3
+    FORMULA_COLS = {
+    "AUTOCOMPLETADO NombreCampaña",  # Columna B (n° 1 en tu mapeo)
+    "AUTOCOMPLETADO NombreEstacion-Número Replica-Tipo de monitoreo",  # Columna D (n° 3)}
+
     for r in range(start_row, len(df_registro_plantilla) + start_row):
         for col_number in sorted(numero_registro.keys()):
             col_name = numero_registro[col_number]
-            v = df_registro_plantilla.loc[r - start_row, col_name] if not df_registro_plantilla.empty else None
+
+            # No pisar las columnas que tienen fórmulas en la plantilla
+            if col_name in FORMULA_COLS:
+                continue
+
+            v = (
+                df_registro_plantilla.loc[r - start_row, col_name]
+                if not df_registro_plantilla.empty
+                else None
+            )
             wo.cell(row=r, column=col_number, value=v)
+
 
     # Guardar a /tmp/downloads
     out_name = f"Flora_{_safe_filename(campana_id)}_{uuid.uuid4().hex[:6]}.xlsx"
@@ -456,5 +468,6 @@ def export_excel(request: Request, campana_id: str = Query(..., description="cam
     download_url = f"{proto}://{host}{rel}"
 
     return JSONResponse({"download_url": download_url, "filename": out_path.name})
+
 
 
